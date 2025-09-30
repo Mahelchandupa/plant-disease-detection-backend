@@ -34,27 +34,43 @@ cnn_model = None
 transfer_model = None
 
 def download_models():
-    """Download models from different Google Drive folders"""
+    """Download models from Google Drive with detailed logging"""
     model_files = {
         'transfer_weights_verified.npy': '1xYQK1qhYFSS799b2GyrjFzTyyqH0q2uy',
         'working_cnn_final.keras': '1NAXMeUG8kp5NYbu5C-Pu_g_wdY2V7cIM'
     }
     
-    # Create models directory
     os.makedirs('models', exist_ok=True)
+    logger.info("📁 Models directory ready")
     
     for filename, file_id in model_files.items():
         filepath = f'models/{filename}'
-        if not os.path.exists(filepath):
-            try:
-                logger.info(f"Downloading {filename}...")
-                url = f'https://drive.google.com/uc?id={file_id}'
-                gdown.download(url, filepath, quiet=False)
-                logger.info(f"✓ Downloaded {filename}")
-            except Exception as e:
-                logger.error(f"Failed to download {filename}: {e}")
-        else:
-            logger.info(f"✓ {filename} already exists")
+        
+        if os.path.exists(filepath):
+            file_size = os.path.getsize(filepath) / (1024 * 1024)  # Size in MB
+            logger.info(f"✅ {filename} already exists ({file_size:.2f} MB)")
+            continue
+            
+        if file_id.startswith('YOUR_ACTUAL'):
+            logger.error(f"❌ {filename}: File ID not configured")
+            continue
+            
+        try:
+            logger.info(f"📥 Downloading {filename}...")
+            url = f'https://drive.google.com/uc?id={file_id}'
+            
+            # Download with progress
+            gdown.download(url, filepath, quiet=False)
+            
+            # Verify download
+            if os.path.exists(filepath):
+                file_size = os.path.getsize(filepath) / (1024 * 1024)
+                logger.info(f"✅ Successfully downloaded {filename} ({file_size:.2f} MB)")
+            else:
+                logger.error(f"❌ Download failed: {filename} not created")
+                
+        except Exception as e:
+            logger.error(f"❌ Failed to download {filename}: {str(e)}")
 
 def allowed_file(filename):
     """Check if file extension is allowed"""
@@ -152,31 +168,52 @@ def verify_model_trained(model):
     return model
 
 def load_models():
-    """Load both trained models with guaranteed compatibility"""
+    """Load both trained models with better error handling"""
     global cnn_model, transfer_model
     
     try:
-        # Download models if they 
+        # Download models first
         download_models()
+        
+        # Check which files actually exist
+        model_paths = {
+            'CNN': 'models/working_cnn_final.keras',
+            'Transfer': 'models/transfer_weights_verified.npy'
+        }
+        
+        for model_name, path in model_paths.items():
+            if os.path.exists(path):
+                file_size = os.path.getsize(path) / (1024 * 1024)
+                logger.info(f"📊 {model_name} model: {path} ({file_size:.2f} MB)")
+            else:
+                logger.warning(f"⚠️ {model_name} model not found: {path}")
         
         # Load CNN model
         cnn_path = 'models/working_cnn_final.keras'
         if os.path.exists(cnn_path):
             try:
                 cnn_model = tf.keras.models.load_model(cnn_path)
-                logger.info("CNN model loaded successfully")
+                logger.info("✅ CNN model loaded successfully")
+                
+                # Test the model
+                test_input = np.random.rand(1, 128, 128, 3).astype(np.float32)
+                test_pred = cnn_model.predict(test_input, verbose=0)
+                logger.info(f"🧪 CNN test prediction shape: {test_pred.shape}")
+                
             except Exception as e:
-                logger.error(f"CNN model loading failed: {e}")
+                logger.error(f"❌ CNN model loading failed: {e}")
                 cnn_model = None
         else:
-            logger.warning(f"CNN model not found at {cnn_path}")
+            logger.warning("⚠️ CNN model file not found")
             cnn_model = None
         
         # Load transfer model
         transfer_model = load_transfer_model_robust()
             
     except Exception as e:
-        logger.error(f"Critical error in model loading: {str(e)}")
+        logger.error(f"💥 Critical error in model loading: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
         cnn_model = None
         transfer_model = None
 
