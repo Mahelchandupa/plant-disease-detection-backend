@@ -9,6 +9,7 @@ from PIL import Image
 import os
 from werkzeug.utils import secure_filename
 import logging
+import gdow
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -31,6 +32,29 @@ CLASS_NAMES = ['Healthy', 'Early Blight', 'Late Blight', 'Bacterial Spot']
 # Global variables for models
 cnn_model = None
 transfer_model = None
+
+def download_models():
+    """Download models from different Google Drive folders"""
+    model_files = {
+        'transfer_weights_verified.npy': '1xYQK1qhYFSS799b2GyrjFzTyyqH0q2uy',
+        'working_cnn_final.keras': '1NAXMeUG8kp5NYbu5C-Pu_g_wdY2V7cIM'
+    }
+    
+    # Create models directory
+    os.makedirs('models', exist_ok=True)
+    
+    for filename, file_id in model_files.items():
+        filepath = f'models/{filename}'
+        if not os.path.exists(filepath):
+            try:
+                logger.info(f"Downloading {filename}...")
+                url = f'https://drive.google.com/uc?id={file_id}'
+                gdown.download(url, filepath, quiet=False)
+                logger.info(f"✓ Downloaded {filename}")
+            except Exception as e:
+                logger.error(f"Failed to download {filename}: {e}")
+        else:
+            logger.info(f"✓ {filename} already exists")
 
 def allowed_file(filename):
     """Check if file extension is allowed"""
@@ -132,6 +156,9 @@ def load_models():
     global cnn_model, transfer_model
     
     try:
+        # Download models if they 
+        download_models()
+        
         # Load CNN model
         cnn_path = 'models/working_cnn_final.keras'
         if os.path.exists(cnn_path):
@@ -357,5 +384,8 @@ if __name__ == '__main__':
     # Load models on startup
     load_models()
     
+    # Get port from environment variable (Render provides this)
+    port = int(os.environ.get("PORT", 5000))
+    
     # Run the application
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    app.run(debug=False, host='0.0.0.0', port=port)
