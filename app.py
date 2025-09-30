@@ -9,7 +9,7 @@ from PIL import Image
 import os
 from werkzeug.utils import secure_filename
 import logging
-import gdow
+import gdown
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
