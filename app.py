@@ -72,6 +72,130 @@ def download_models():
         except Exception as e:
             logger.error(f"❌ Failed to download {filename}: {str(e)}")
 
+def download_models_with_fallback():
+    """Try main download first, then fallback to alternative method"""
+    os.makedirs('models', exist_ok=True)
+    
+    model_files = {
+        'transfer_weights_verified.npy': '1xYQK1qhYFSS799b2GyrjFzTyyqH0q2uy',
+        'working_cnn_final.keras': '1NAXMeUG8kp5NYbu5C-Pu_g_wdY2V7cIM'
+    }
+    
+    # Track which files need downloading
+    files_to_download = []
+    for filename, file_id in model_files.items():
+        filepath = f'models/{filename}'
+        if not os.path.exists(filepath):
+            files_to_download.append((filename, file_id))
+            logger.info(f"📋 Need to download: {filename}")
+        else:
+            file_size = os.path.getsize(filepath) / (1024 * 1024)
+            logger.info(f"✅ Already exists: {filename} ({file_size:.2f} MB)")
+    
+    if not files_to_download:
+        logger.info("🎉 All model files already downloaded")
+        return True
+    
+    # Try main gdown method first
+    logger.info("🔄 Attempting main download with gdown...")
+    success_count = 0
+    
+    for filename, file_id in files_to_download:
+        filepath = f'models/{filename}'
+        try:
+            logger.info(f"📥 Main download: {filename}")
+            url = f'https://drive.google.com/uc?id={file_id}'
+            gdown.download(url, filepath, quiet=False)
+            
+            if os.path.exists(filepath):
+                file_size = os.path.getsize(filepath) / (1024 * 1024)
+                logger.info(f"✅ Main download success: {filename} ({file_size:.2f} MB)")
+                success_count += 1
+            else:
+                logger.warning(f"⚠️ Main download failed: {filename}")
+                
+        except Exception as e:
+            logger.warning(f"⚠️ Main download failed for {filename}: {e}")
+    
+    # Check if we need fallback
+    remaining_files = [(f, fid) for f, fid in files_to_download if not os.path.exists(f'models/{f}')]
+    
+    if remaining_files:
+        logger.info(f"🔄 {len(remaining_files)} files failed, trying alternative download...")
+        success_count += download_models_alternative(remaining_files)
+    
+    total_files = len(files_to_download)
+    logger.info(f"📊 Download summary: {success_count}/{total_files} files successful")
+    
+    return success_count == total_files
+
+def download_models_alternative(specific_files=None):
+    """Alternative download method using requests"""
+    import requests
+    
+    model_files = {
+        'transfer_weights_verified.npy': '1xYQK1qhYFSS799b2GyrjFzTyyqH0q2uy',
+        'working_cnn_final.keras': '1NAXMeUG8kp5NYbu5C-Pu_g_wdY2V7cIM'
+    }
+    
+    # Use specific files if provided, otherwise all files
+    if specific_files:
+        files_to_download = specific_files
+    else:
+        files_to_download = [(f, fid) for f, fid in model_files.items() if not os.path.exists(f'models/{f}')]
+    
+    success_count = 0
+    
+    for filename, file_id in files_to_download:
+        filepath = f'models/{filename}'
+        
+        if os.path.exists(filepath):
+            continue
+            
+        try:
+            logger.info(f"🔄 Alternative download: {filename}")
+            
+            # Direct download with confirmation handling
+            url = f"https://docs.google.com/uc?export=download&id={file_id}"
+            session = requests.Session()
+            response = session.get(url, stream=True)
+            
+            # Handle large file confirmation
+            for key, value in response.cookies.items():
+                if key.startswith('download_warning'):
+                    url = f"https://docs.google.com/uc?export=download&confirm={value}&id={file_id}"
+                    response = session.get(url, stream=True)
+                    break
+            
+            # Save file with progress
+            total_size = int(response.headers.get('content-length', 0))
+            downloaded_size = 0
+            
+            with open(filepath, 'wb') as f:
+                for chunk in response.iter_content(chunk_size=8192):
+                    if chunk:
+                        f.write(chunk)
+                        downloaded_size += len(chunk)
+                        
+                        # Log progress for large files
+                        if total_size > 0:
+                            progress = (downloaded_size / total_size) * 100
+                            if progress % 20 == 0:  # Log every 20%
+                                logger.info(f"📦 Downloading {filename}: {progress:.1f}%")
+            
+            # Verify download
+            if os.path.exists(filepath):
+                file_size = os.path.getsize(filepath) / (1024 * 1024)
+                logger.info(f"✅ Alternative download successful: {filename} ({file_size:.2f} MB)")
+                success_count += 1
+            else:
+                logger.error(f"❌ Alternative download failed: {filename}")
+                
+        except Exception as e:
+            logger.error(f"❌ Alternative download error for {filename}: {e}")
+    
+    return success_count
+
 def allowed_file(filename):
     """Check if file extension is allowed"""
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
@@ -173,7 +297,10 @@ def load_models():
     
     try:
         # Download models first
-        download_models()
+        download_success = download_models_with_fallback()
+        
+        if not download_success:
+            logger.error("💥 Model download failed - check file IDs and internet connection")
         
         # Check which files actually exist
         model_paths = {
