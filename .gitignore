@@ -60,11 +60,11 @@ logs/
 *.temp
 
 # Model files (optional - see note below)
-*.keras
-*.h5
-*.pkl
-*.joblib
-*.npy
+# *.keras
+# *.h5
+# *.pkl
+# *.joblib
+# *.npy
 
 # Testing
 .pytest_cache/
@@ -74,6 +74,6 @@ htmlcov/
 # FastAPI specific
 .pytest_cache
 
-models/*.keras
-models/*.h5
-models/*.npy
+# models/*.keras
+# models/*.h5
+# models/*.npy
